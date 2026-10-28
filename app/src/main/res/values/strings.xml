@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">到站叫醒</string>
+    <string name="channel_guard">守护提醒</string>
+    <string name="channel_guard_desc">显示正在进行的到站守护</string>
+    <string name="channel_alarm">到站闹钟</string>
+    <string name="channel_alarm_desc">到达站点附近时响铃与震动</string>
+    <string name="channel_trip">行程记录</string>
+    <string name="channel_trip_desc">显示正在记录的行程与速度</string>
+</resources>
