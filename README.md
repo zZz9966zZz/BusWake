@@ -239,6 +239,10 @@ dist/                        发布 APK
 - 地图底图需要网络；高德底图不可用时可切换 OpenStreetMap。
 - 本项目为个人通勤辅助工具，不能替代留意报站和司机提醒，请在安全前提下使用。
 
+## 许可证
+
+本项目采用 **MIT License**，详见 [LICENSE](LICENSE)。
+
 ## 第三方组件
 
 - Leaflet 1.9.4，BSD-2-Clause，许可证见 `app/src/main/assets/leaflet-LICENSE.txt`。
