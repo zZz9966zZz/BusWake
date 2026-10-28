@@ -1,0 +1,17 @@
+# local Android build toolchain
+.build/
+.gradle/
+local.properties
+
+# signing material must never be committed
+*.keystore
+*.jks
+*.apk.idsig
+
+# archived APKs
+dist/v*-old/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
