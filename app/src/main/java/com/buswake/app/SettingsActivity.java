@@ -29,6 +29,7 @@ public final class SettingsActivity extends Activity {
     private EditText intervalInput;
     private EditText speedInput;
     private EditText leadTimeInput;
+    private EditText tripIntervalInput;
     private TextView distancePreview;
     private TextView distanceEstimate;
     private TextView intervalPreview;
@@ -38,6 +39,7 @@ public final class SettingsActivity extends Activity {
     private TextView recommendDetail;
     private TextView applyRecommendation;
     private TextView soundValue;
+    private TextView tripIntervalPreview;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -89,13 +91,15 @@ public final class SettingsActivity extends Activity {
         LinearLayout frequencyCard = buildFrequencyCard();
         content.addView(frequencyCard, cardLp);
 
+        content.addView(buildTripIntervalCard(), cardLp);
+
         content.addView(buildSoundCard(), cardLp);
 
         if (StopStore.isGuardRunning(this)) {
             content.addView(buildLiveCard(), cardLp);
         }
 
-        TextView footer = Ui.text(this, "到站叫醒 1.7  ·  设置仅保存在本机", 10, 0xFF64748B);
+        TextView footer = Ui.text(this, "到站叫醒 1.8  ·  设置仅保存在本机", 10, 0xFF64748B);
         footer.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams footerLp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
@@ -524,6 +528,93 @@ public final class SettingsActivity extends Activity {
         return card;
     }
 
+    private LinearLayout buildTripIntervalCard() {
+        LinearLayout card = card();
+
+        LinearLayout header = new LinearLayout(this);
+        header.setOrientation(LinearLayout.HORIZONTAL);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        header.addView(Ui.strong(this, "行程记录精度", 15, Ui.TEXT),
+                new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        tripIntervalPreview = Ui.strong(this, "每 0.5 秒", 21, Ui.ACCENT);
+        tripIntervalPreview.setGravity(Gravity.END);
+        header.addView(tripIntervalPreview);
+        card.addView(header);
+
+        TextView desc = Ui.text(this,
+                "只影响行程记录的采样频率，与叫醒守护的定位频率独立。间隔越小，路线和速度越精细，耗电越高。",
+                11, Ui.MUTED);
+        LinearLayout.LayoutParams descLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        descLp.topMargin = Ui.dp(this, 6);
+        card.addView(desc, descLp);
+
+        LinearLayout inputRow = new LinearLayout(this);
+        inputRow.setOrientation(LinearLayout.HORIZONTAL);
+        inputRow.setGravity(Gravity.CENTER_VERTICAL);
+        tripIntervalInput = input("0.5", "例如 0.5", InputType.TYPE_CLASS_NUMBER
+                | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        inputRow.addView(tripIntervalInput, new LinearLayout.LayoutParams(0, Ui.dp(this, 48), 1f));
+
+        TextView unit = Ui.strong(this, "秒", 13, Ui.MUTED);
+        unit.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams unitLp = new LinearLayout.LayoutParams(Ui.dp(this, 58), Ui.dp(this, 48));
+        unitLp.leftMargin = Ui.dp(this, 8);
+        inputRow.addView(unit, unitLp);
+        LinearLayout.LayoutParams inputLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        inputLp.topMargin = Ui.dp(this, 12);
+        card.addView(inputRow, inputLp);
+
+        card.addView(buildPresetRow(new String[]{"0.2", "0.5", "1", "2", "5"}, 5), presetLp());
+
+        TextView range = Ui.text(this,
+                "可设置 0.2 – 10 秒，支持小数；默认 0.5 秒。记录中修改会在下一次记录生效。",
+                10, 0xFF64748B);
+        LinearLayout.LayoutParams rangeLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        rangeLp.topMargin = Ui.dp(this, 8);
+        card.addView(range, rangeLp);
+
+        tripIntervalInput.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+                updateTripIntervalPreview();
+            }
+        });
+        tripIntervalInput.setText(formatTripSeconds(StopStore.getTripIntervalMs(this)));
+        tripIntervalInput.setSelection(tripIntervalInput.getText().length());
+        return card;
+    }
+
+    private void updateTripIntervalPreview() {
+        if (tripIntervalPreview == null) {
+            return;
+        }
+        double seconds = parseDouble(tripIntervalInput.getText().toString());
+        if (seconds >= 0.2 && seconds <= 10.0) {
+            tripIntervalPreview.setText(String.format(Locale.CHINA, "每 %.1f 秒", seconds));
+        } else {
+            tripIntervalPreview.setText("—");
+        }
+    }
+
+    private String formatTripSeconds(int ms) {
+        double seconds = ms / 1000.0;
+        if (Math.abs(seconds - Math.round(seconds)) < 0.05) {
+            return String.valueOf(Math.round(seconds));
+        }
+        return String.format(Locale.CHINA, "%.1f", seconds);
+    }
+
     private LinearLayout buildSoundCard() {
         LinearLayout card = card();
 
@@ -686,7 +777,7 @@ public final class SettingsActivity extends Activity {
         row.setOrientation(LinearLayout.HORIZONTAL);
         for (int i = 0; i < values.length; i++) {
             final String value = values[i];
-            String suffix = type == 3 ? "" : (type == 2 || type == 4 ? " 秒" : " 公里");
+            String suffix = type == 3 ? "" : (type == 2 || type == 4 || type == 5 ? " 秒" : " 公里");
             TextView item = presetButton(value + suffix);
             item.setOnClickListener(v -> {
                 EditText target;
@@ -696,6 +787,8 @@ public final class SettingsActivity extends Activity {
                     target = speedInput;
                 } else if (type == 4) {
                     target = leadTimeInput;
+                } else if (type == 5) {
+                    target = tripIntervalInput;
                 } else {
                     target = distanceInput;
                 }
@@ -868,12 +961,22 @@ public final class SettingsActivity extends Activity {
             return;
         }
 
+        double tripSeconds = parseDouble(tripIntervalInput.getText().toString());
+        if (tripSeconds < 0.2 || tripSeconds > 10.0) {
+            tripIntervalInput.setError("请输入 0.2 – 10 秒");
+            tripIntervalInput.requestFocus();
+            Toast.makeText(this, "行程记录精度需在 0.2 – 10 秒之间", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
         int meters = (int) Math.round(km * 10) * 100;
         StopStore.setManualSpeed(this, (float) speed);
         StopStore.setLeadTimeSeconds(this, leadSeconds);
         StopStore.setRadiusM(this, meters);
         StopStore.setIntervalMs(this, seconds * 1000);
+        StopStore.setTripIntervalMs(this, (int) Math.round(tripSeconds * 1000));
         AppLog.i("Settings", "Saved: radius=" + meters + "m, interval=" + (seconds * 1000)
+                + "ms, tripInterval=" + Math.round(tripSeconds * 1000)
                 + "ms, speed=" + speed + "km/h, lead=" + leadSeconds + "s");
 
         if (StopStore.isGuardRunning(this)) {
@@ -905,6 +1008,9 @@ public final class SettingsActivity extends Activity {
                     distanceInput.setSelection(distanceInput.getText().length());
                     intervalInput.setText(String.valueOf(StopStore.DEFAULT_INTERVAL_MS / 1000));
                     intervalInput.setSelection(intervalInput.getText().length());
+                    tripIntervalInput.setText(formatTripSeconds(StopStore.DEFAULT_TRIP_INTERVAL_MS));
+                    tripIntervalInput.setSelection(tripIntervalInput.getText().length());
+                    updateTripIntervalPreview();
                     updateSpeedAssistant();
                     updatePreviews();
                 })

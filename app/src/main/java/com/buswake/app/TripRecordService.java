@@ -131,7 +131,8 @@ public final class TripRecordService extends Service {
         lastLocation = null;
         trip = Trip.create(startedAt);
         TripStore.startRecording(this, startedAt);
-        AppLog.i("Trip", "Recording started, sample interval: GPS=500ms, network=500ms");
+        AppLog.i("Trip", "Recording started, requested sample interval="
+                + StopStore.getTripIntervalMs(this) + "ms");
 
         startForeground(NOTIF_TRIP, buildNotification(false));
         acquireWakeLock();
@@ -153,17 +154,18 @@ public final class TripRecordService extends Service {
             locationManager.removeUpdates(listener);
         } catch (Exception ignored) {
         }
+        long interval = StopStore.getTripIntervalMs(this);
         try {
             if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
                 locationManager.requestLocationUpdates(
-                        LocationManager.GPS_PROVIDER, RECORD_GPS_INTERVAL_MS, 0f, listener, Looper.getMainLooper());
+                        LocationManager.GPS_PROVIDER, interval, 0f, listener, Looper.getMainLooper());
             }
         } catch (Exception ignored) {
         }
         try {
             if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
                 locationManager.requestLocationUpdates(
-                        LocationManager.NETWORK_PROVIDER, RECORD_NETWORK_INTERVAL_MS, 0f, listener, Looper.getMainLooper());
+                        LocationManager.NETWORK_PROVIDER, interval, 0f, listener, Looper.getMainLooper());
             }
         } catch (Exception ignored) {
         }
@@ -204,7 +206,7 @@ public final class TripRecordService extends Service {
         long relative = nowElapsed - startedElapsed;
         if (lastLocation != null) {
             long dt = nowElapsed - lastElapsed;
-            if (dt < 300) {
+            if (dt < 150) {
                 return;
             }
             float[] result = new float[1];

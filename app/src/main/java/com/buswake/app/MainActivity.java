@@ -148,7 +148,7 @@ public final class MainActivity extends Activity {
 
         column.addView(buildTipsCard(), marginsTop(14));
 
-        TextView footer = Ui.text(this, "到站叫醒 v1.7  ·  站点坐标仅保存在本机", 10, 0xFF64748B);
+        TextView footer = Ui.text(this, "到站叫醒 v1.8  ·  站点坐标仅保存在本机", 10, 0xFF64748B);
         footer.setGravity(Gravity.CENTER);
         column.addView(footer, marginsTop(22));
 
@@ -724,17 +724,17 @@ public final class MainActivity extends Activity {
             any = true;
         } else if (alarmChannelBlocked()) {
             warningContainer.addView(warningCard(
-                    "到站闹钟通知被关闭",
-                    "“到站闹钟”通知渠道被关闭，锁屏时可能看不到停止按钮。请重新允许该渠道。",
-                    "去开启",
+                    "到站闹钟通知不是高优先级",
+                    "请把“到站闹钟”通知渠道设为高优先级并允许通知，否则锁屏时可能只亮屏、不弹窗。",
+                    "去设置",
                     this::openNotificationSettings));
             any = true;
         }
 
         if (Build.VERSION.SDK_INT >= 34 && nm != null && !nm.canUseFullScreenIntent()) {
             warningContainer.addView(warningCard(
-                    "全屏闹钟未授权",
-                    "Android 14 需要单独允许“全屏通知”，否则锁屏时可能只响铃不亮屏。",
+                    "锁屏全屏闹钟未授权",
+                    "Android 14 需要单独允许“全屏通知”，否则锁屏时可能只亮屏、不弹窗。",
                     "去授权",
                     this::openFullScreenSettings));
             any = true;
@@ -891,14 +891,31 @@ public final class MainActivity extends Activity {
         }
         if (alarmChannelBlocked()) {
             new AlertDialog.Builder(this)
-                    .setTitle("到站闹钟通知被关闭")
-                    .setMessage("请先在通知设置中重新允许“到站闹钟”渠道，否则锁屏时可能没有停止按钮。")
+                    .setTitle("到站闹钟通知未开启")
+                    .setMessage("请先在通知设置中把“到站闹钟”渠道设为高优先级并允许通知，否则锁屏时不会弹出全屏闹钟。")
                     .setNegativeButton("取消", null)
                     .setPositiveButton("去开启", (d, w) -> openNotificationSettings())
                     .show();
             return;
         }
+        if (Build.VERSION.SDK_INT >= 34 && !fullScreenIntentAllowed()) {
+            new AlertDialog.Builder(this)
+                    .setTitle("锁屏全屏闹钟未授权")
+                    .setMessage("Android 14 及以上需要单独允许“全屏通知”，否则锁屏时可能只亮屏、不弹窗。请授权后再开始守护，确保到站时能直接看到停止按钮。")
+                    .setNegativeButton("取消", null)
+                    .setPositiveButton("去授权", (d, w) -> openFullScreenSettings())
+                    .show();
+            return;
+        }
         startGuardNow();
+    }
+
+    private boolean fullScreenIntentAllowed() {
+        if (Build.VERSION.SDK_INT < 34) {
+            return true;
+        }
+        NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        return nm == null || nm.canUseFullScreenIntent();
     }
 
     private boolean alarmChannelBlocked() {
@@ -912,7 +929,7 @@ public final class MainActivity extends Activity {
         android.app.NotificationChannel channel =
                 nm.getNotificationChannel(GuardService.CHANNEL_ALARM);
         return channel != null
-                && channel.getImportance() == NotificationManager.IMPORTANCE_NONE;
+                && channel.getImportance() < NotificationManager.IMPORTANCE_HIGH;
     }
 
     private void startGuardNow() {

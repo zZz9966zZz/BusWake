@@ -22,6 +22,7 @@ public final class BackupManager {
     public static final class BackupData {
         public int radiusM;
         public int intervalMs;
+        public int tripIntervalMs;
         public float manualSpeed;
         public int leadSeconds;
         public final List<Stop> stops = new ArrayList<>();
@@ -60,6 +61,7 @@ public final class BackupManager {
         BackupData data = new BackupData();
         data.radiusM = StopStore.getRadiusM(c);
         data.intervalMs = StopStore.getIntervalMs(c);
+        data.tripIntervalMs = StopStore.getTripIntervalMs(c);
         data.manualSpeed = StopStore.getManualSpeed(c);
         data.leadSeconds = StopStore.getLeadTimeSeconds(c);
 
@@ -70,6 +72,9 @@ public final class BackupManager {
             data.intervalMs = clamp((int) Math.round(metric(settings, "locationInterval",
                             "locationIntervalMs", data.intervalMs)),
                     StopStore.MIN_INTERVAL_MS, StopStore.MAX_INTERVAL_MS);
+            data.tripIntervalMs = clamp((int) Math.round(metric(settings, "tripInterval",
+                            "tripIntervalMs", data.tripIntervalMs)),
+                    StopStore.MIN_TRIP_INTERVAL_MS, StopStore.MAX_TRIP_INTERVAL_MS);
             data.manualSpeed = (float) Math.max(StopStore.MIN_SPEED_KMH,
                     Math.min(StopStore.MAX_SPEED_KMH,
                             metric(settings, "manualSpeed", "manualSpeedKmh", data.manualSpeed)));
@@ -129,6 +134,7 @@ public final class BackupManager {
         StopStore.saveStops(c, data.stops);
         StopStore.setRadiusM(c, data.radiusM);
         StopStore.setIntervalMs(c, data.intervalMs);
+        StopStore.setTripIntervalMs(c, data.tripIntervalMs);
         StopStore.setManualSpeed(c, data.manualSpeed);
         StopStore.setLeadTimeSeconds(c, data.leadSeconds);
         if (data.stops.isEmpty()) {

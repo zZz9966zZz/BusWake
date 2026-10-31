@@ -27,6 +27,7 @@ public final class StopStore {
     public static final String KEY_INTERVAL_MS = "location_interval_ms";
     public static final String KEY_MANUAL_SPEED = "manual_speed_kmh";
     public static final String KEY_LEAD_TIME_SEC = "wake_lead_time_sec";
+    public static final String KEY_TRIP_INTERVAL_MS = "trip_interval_ms";
 
     public static final int DEFAULT_RADIUS_M = 2000;
     public static final int DEFAULT_INTERVAL_MS = 2000;
@@ -34,6 +35,10 @@ public final class StopStore {
     public static final int MAX_RADIUS_M = 20000;
     public static final int MIN_INTERVAL_MS = 1000;
     public static final int MAX_INTERVAL_MS = 60000;
+
+    public static final int DEFAULT_TRIP_INTERVAL_MS = 500;
+    public static final int MIN_TRIP_INTERVAL_MS = 200;
+    public static final int MAX_TRIP_INTERVAL_MS = 10000;
 
     public static final float DEFAULT_MANUAL_SPEED = 80f;
     public static final float MIN_SPEED_KMH = 1f;
@@ -132,6 +137,20 @@ public final class StopStore {
     public static void setIntervalMs(Context c, int millis) {
         int value = Math.max(MIN_INTERVAL_MS, Math.min(MAX_INTERVAL_MS, millis));
         prefs(c).edit().putInt(KEY_INTERVAL_MS, value).apply();
+    }
+
+    public static int getTripIntervalMs(Context c) {
+        int value = prefs(c).getInt(KEY_TRIP_INTERVAL_MS, DEFAULT_TRIP_INTERVAL_MS);
+        return Math.max(MIN_TRIP_INTERVAL_MS, Math.min(MAX_TRIP_INTERVAL_MS, value));
+    }
+
+    public static void setTripIntervalMs(Context c, int millis) {
+        int value = Math.max(MIN_TRIP_INTERVAL_MS, Math.min(MAX_TRIP_INTERVAL_MS, millis));
+        prefs(c).edit().putInt(KEY_TRIP_INTERVAL_MS, value).apply();
+    }
+
+    public static String formatTripInterval(int ms) {
+        return String.format(java.util.Locale.CHINA, "%.1f 秒", ms / 1000.0);
     }
 
     public static String formatRadius(int meters) {

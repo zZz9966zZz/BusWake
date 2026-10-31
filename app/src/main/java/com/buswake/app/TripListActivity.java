@@ -197,7 +197,7 @@ public final class TripListActivity extends Activity {
         buttonLp.topMargin = Ui.dp(this, 14);
         card.addView(recordButton, buttonLp);
 
-        TextView hint = Ui.text(this, "记录时固定每秒采样，锁屏后仍会继续。", 10, 0xFF64748B);
+        TextView hint = Ui.text(this, "记录频率可在“叫醒设置”中调整，默认 0.5 秒；锁屏后仍会继续。", 10, 0xFF64748B);
         LinearLayout.LayoutParams hintLp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         hintLp.topMargin = Ui.dp(this, 8);

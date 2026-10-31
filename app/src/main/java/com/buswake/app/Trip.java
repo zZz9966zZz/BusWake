@@ -178,17 +178,23 @@ public final class Trip {
             units.put("longitude", "degrees");
             o.put("units", units);
 
+            JSONArray format = new JSONArray();
+            format.put("elapsedSeconds");
+            format.put("distanceMeters");
+            format.put("speedKmh");
+            format.put("latitude");
+            format.put("longitude");
+            o.put("pointFormat", format);
+
             JSONArray arr = new JSONArray();
-            for (int i = 0; i < points.size(); i++) {
-                Point p = points.get(i);
-                JSONObject item = new JSONObject();
-                item.put("index", i);
-                item.put("elapsedSeconds", round1(p.elapsedMs / 1000.0));
-                item.put("distanceMeters", round1(p.distanceM));
-                item.put("speedKmh", round1(p.speedKmh));
-                item.put("latitude", p.lat);
-                item.put("longitude", p.lng);
-                arr.put(item);
+            for (Point p : points) {
+                JSONArray a = new JSONArray();
+                a.put(round1(p.elapsedMs / 1000.0));
+                a.put(round1(p.distanceM));
+                a.put(round1(p.speedKmh));
+                a.put(p.lat);
+                a.put(p.lng);
+                arr.put(a);
             }
             o.put("points", arr);
         } catch (Exception ignored) {
@@ -206,6 +212,7 @@ public final class Trip {
         t.startedAt = o.optLong("startedAt", System.currentTimeMillis());
         t.endedAt = o.optLong("endedAt", t.startedAt);
         JSONArray arr = o.optJSONArray("points");
+        boolean compactExport = o.optJSONArray("pointFormat") != null;
         if (arr != null) {
             for (int i = 0; i < arr.length(); i++) {
                 Object item = arr.opt(i);
@@ -214,10 +221,21 @@ public final class Trip {
                     if (a.length() < 5) {
                         continue;
                     }
-                    t.points.add(new Point(
-                            a.optDouble(0), a.optDouble(1), a.optLong(2),
-                            a.optDouble(3), round1(a.optDouble(4))
-                    ));
+                    if (compactExport) {
+                        long elapsedMs = Math.round(a.optDouble(0) * 1000.0);
+                        double dist = a.optDouble(1);
+                        double speed = round1(a.optDouble(2));
+                        double lat = a.optDouble(3);
+                        double lng = a.optDouble(4);
+                        if (lat != 0 || lng != 0) {
+                            t.points.add(new Point(lat, lng, elapsedMs, dist, speed));
+                        }
+                    } else {
+                        t.points.add(new Point(
+                                a.optDouble(0), a.optDouble(1), a.optLong(2),
+                                a.optDouble(3), round1(a.optDouble(4))
+                        ));
+                    }
                 } else if (item instanceof JSONObject) {
                     JSONObject p = (JSONObject) item;
                     double lat = p.optDouble("latitude", p.optDouble("lat", 0));
