@@ -132,6 +132,8 @@
     var line = null;
     var startMarker = null;
     var endMarker = null;
+    var selectedMarker = null;
+    var selectedWgs = null;
 
     var amapLayer = L.tileLayer(
         "https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}",
@@ -155,6 +157,21 @@
         if (line) { map.removeLayer(line); line = null; }
         if (startMarker) { map.removeLayer(startMarker); startMarker = null; }
         if (endMarker) { map.removeLayer(endMarker); endMarker = null; }
+        if (selectedMarker) { map.removeLayer(selectedMarker); selectedMarker = null; }
+    }
+
+    function drawSelectedPoint() {
+        if (selectedMarker) { map.removeLayer(selectedMarker); selectedMarker = null; }
+        if (!selectedWgs) return;
+        var d = display(selectedWgs[0], selectedWgs[1]);
+        selectedMarker = L.circleMarker(d, {
+            radius: 8,
+            color: "#ffffff",
+            weight: 2,
+            fillColor: "#fbbf24",
+            fillOpacity: 1,
+            interactive: false
+        }).addTo(map);
     }
 
     function drawRoute(fit) {
@@ -204,6 +221,8 @@
             interactive: false
         }).addTo(map);
 
+        drawSelectedPoint();
+
         if (fit) {
             map.fitBounds(L.latLngBounds(latlngs), {
                 padding: [28, 28],
@@ -250,6 +269,10 @@
     window.setRoute = function (data) {
         route = data || [];
         drawRoute(true);
+    };
+    window.setSelectedPoint = function (lat, lng) {
+        selectedWgs = [lat, lng];
+        drawSelectedPoint();
     };
     window.setRouteFromJson = function (json) {
         try {

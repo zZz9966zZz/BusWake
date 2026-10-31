@@ -246,7 +246,7 @@ public final class TripListActivity extends Activity {
                     "%s · %s · 当前 %s · %d 个采样点",
                     Trip.formatDuration(elapsed),
                     StopStore.formatDistance(distance),
-                    StopStore.formatSpeed(speed),
+                    Trip.formatSpeed1(speed),
                     points));
             recordButton.setText("结束并保存");
             if (changed) {
@@ -307,7 +307,7 @@ public final class TripListActivity extends Activity {
         card.addView(top);
 
         TextView sub = Ui.text(this, trip.subtitle()
-                + " · 最高 " + String.format(Locale.CHINA, "%.0f km/h", trip.maxSpeedKmh()),
+                + " · 最高 " + String.format(Locale.CHINA, "%.1f km/h", trip.maxSpeedKmh()),
                 11, Ui.MUTED);
         LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);

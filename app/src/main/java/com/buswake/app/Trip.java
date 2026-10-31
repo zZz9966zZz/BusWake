@@ -86,7 +86,36 @@ public final class Trip {
 
     public String subtitle() {
         return StopStore.formatDistance(totalDistanceM()) + " · " + formatDuration(durationMs() / 1000)
-                + " · 均速 " + String.format(Locale.CHINA, "%.0f km/h", avgSpeedKmh());
+                + " · 均速 " + String.format(Locale.CHINA, "%.1f km/h", avgSpeedKmh());
+    }
+
+    public static double round1(double value) {
+        return Math.round(value * 10.0) / 10.0;
+    }
+
+    public static String formatSpeed1(double speedKmh) {
+        return String.format(Locale.CHINA, "%.1f km/h", speedKmh);
+    }
+
+    /**
+     * Round speeds to one decimal and correct isolated speed spikes.
+     * If a point is above 30 km/h and differs from the average of its neighbours
+     * by more than 50%, the point keeps its position but adopts that average speed.
+     */
+    public void normalizeRecordedSpeeds() {
+        for (Point p : points) {
+            p.speedKmh = round1(Math.max(0, p.speedKmh));
+        }
+        for (int i = 1; i < points.size() - 1; i++) {
+            Point p = points.get(i);
+            if (p.speedKmh <= 30.0) {
+                continue;
+            }
+            double avg = round1((points.get(i - 1).speedKmh + points.get(i + 1).speedKmh) / 2.0);
+            if (Math.abs(p.speedKmh - avg) > Math.abs(avg) * 0.5) {
+                p.speedKmh = Math.max(0, avg);
+            }
+        }
     }
 
     public static String formatDuration(long seconds) {
@@ -124,6 +153,53 @@ public final class Trip {
         return o;
     }
 
+    /**
+     * Readable, self-describing export shape. Field names carry units and each
+     * numeric value is paired with a units block at the trip level.
+     */
+    public JSONObject toExportJson() {
+        JSONObject o = new JSONObject();
+        try {
+            o.put("id", id);
+            o.put("startedAtIso", isoTime(startedAt));
+            o.put("endedAtIso", isoTime(endedAt));
+            o.put("startedAtEpochMs", startedAt);
+            o.put("endedAtEpochMs", endedAt);
+            o.put("durationSeconds", round1(durationMs() / 1000.0));
+            o.put("distanceMeters", round1(totalDistanceM()));
+            o.put("averageSpeedKmh", round1(avgSpeedKmh()));
+            o.put("maximumSpeedKmh", round1(maxSpeedKmh()));
+            o.put("pointCount", points.size());
+            JSONObject units = new JSONObject();
+            units.put("distance", "m");
+            units.put("speed", "km/h");
+            units.put("time", "s");
+            units.put("latitude", "degrees");
+            units.put("longitude", "degrees");
+            o.put("units", units);
+
+            JSONArray arr = new JSONArray();
+            for (int i = 0; i < points.size(); i++) {
+                Point p = points.get(i);
+                JSONObject item = new JSONObject();
+                item.put("index", i);
+                item.put("elapsedSeconds", round1(p.elapsedMs / 1000.0));
+                item.put("distanceMeters", round1(p.distanceM));
+                item.put("speedKmh", round1(p.speedKmh));
+                item.put("latitude", p.lat);
+                item.put("longitude", p.lng);
+                arr.put(item);
+            }
+            o.put("points", arr);
+        } catch (Exception ignored) {
+        }
+        return o;
+    }
+
+    private static String isoTime(long time) {
+        return new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ", Locale.US).format(new Date(time));
+    }
+
     public static Trip fromJson(JSONObject o) {
         Trip t = new Trip();
         t.id = o.optString("id", UUID.randomUUID().toString());
@@ -132,15 +208,39 @@ public final class Trip {
         JSONArray arr = o.optJSONArray("points");
         if (arr != null) {
             for (int i = 0; i < arr.length(); i++) {
-                JSONArray a = arr.optJSONArray(i);
-                if (a == null || a.length() < 5) {
-                    continue;
+                Object item = arr.opt(i);
+                if (item instanceof JSONArray) {
+                    JSONArray a = (JSONArray) item;
+                    if (a.length() < 5) {
+                        continue;
+                    }
+                    t.points.add(new Point(
+                            a.optDouble(0), a.optDouble(1), a.optLong(2),
+                            a.optDouble(3), round1(a.optDouble(4))
+                    ));
+                } else if (item instanceof JSONObject) {
+                    JSONObject p = (JSONObject) item;
+                    double lat = p.optDouble("latitude", p.optDouble("lat", 0));
+                    double lng = p.optDouble("longitude", p.optDouble("lng", 0));
+                    long elapsedMs;
+                    if (p.has("elapsedSeconds")) {
+                        elapsedMs = Math.round(p.optDouble("elapsedSeconds") * 1000.0);
+                    } else {
+                        elapsedMs = p.optLong("elapsedMs", 0);
+                    }
+                    double dist = p.optDouble("distanceMeters", p.optDouble("distanceM", 0));
+                    double speed = p.optDouble("speedKmh", p.optDouble("speed", 0));
+                    if (lat != 0 || lng != 0) {
+                        t.points.add(new Point(lat, lng, elapsedMs, dist, round1(speed)));
+                    }
                 }
-                t.points.add(new Point(
-                        a.optDouble(0), a.optDouble(1), a.optLong(2),
-                        a.optDouble(3), a.optDouble(4)
-                ));
             }
+        }
+        if (o.has("startedAtEpochMs")) {
+            t.startedAt = o.optLong("startedAtEpochMs", t.startedAt);
+        }
+        if (o.has("endedAtEpochMs")) {
+            t.endedAt = o.optLong("endedAtEpochMs", t.endedAt);
         }
         return t;
     }

@@ -6,6 +6,7 @@ import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.Window;
 import android.webkit.JavascriptInterface;
@@ -21,7 +22,9 @@ import java.util.Locale;
 public final class TripDetailActivity extends Activity {
     private Trip trip;
     private WebView webView;
+    private ScrollView scrollView;
     private SpeedChartView chartView;
+    private Trip.Point pendingSelectedPoint;
     private boolean routePosted;
     private boolean mapReady;
 
@@ -59,6 +62,7 @@ public final class TripDetailActivity extends Activity {
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
         scroll.setVerticalScrollBarEnabled(false);
+        scrollView = scroll;
         LinearLayout content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
         Ui.pad(content, Ui.dp(this, 16), Ui.dp(this, 14), Ui.dp(this, 16), Ui.dp(this, 28));
@@ -117,8 +121,8 @@ public final class TripDetailActivity extends Activity {
 
         addStat(card, StopStore.formatDistance(trip.totalDistanceM()), "路程");
         addStat(card, Trip.formatDuration(trip.durationMs() / 1000), "用时");
-        addStat(card, String.format(Locale.CHINA, "%.0f", trip.avgSpeedKmh()), "均速 km/h");
-        addStat(card, String.format(Locale.CHINA, "%.0f", trip.maxSpeedKmh()), "最高 km/h");
+        addStat(card, String.format(Locale.CHINA, "%.1f", trip.avgSpeedKmh()), "均速 km/h");
+        addStat(card, String.format(Locale.CHINA, "%.1f", trip.maxSpeedKmh()), "最高 km/h");
         return card;
     }
 
@@ -149,12 +153,31 @@ public final class TripDetailActivity extends Activity {
         header.setGravity(Gravity.CENTER_VERTICAL);
         header.addView(Ui.strong(this, "路线叠加", 14, Ui.TEXT),
                 new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-        TextView hint = Ui.text(this, "可切换底图", 10, 0xFF64748B);
+        TextView hint = Ui.text(this, "可拖动地图 · 黄点为曲线标尺位置", 10, 0xFF64748B);
         header.addView(hint);
         card.addView(header);
 
         webView = new WebView(this);
         webView.setBackgroundColor(Ui.BG);
+        webView.setOnTouchListener((v, event) -> {
+            if (scrollView == null) {
+                return false;
+            }
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                case MotionEvent.ACTION_POINTER_DOWN:
+                    scrollView.requestDisallowInterceptTouchEvent(true);
+                    break;
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                case MotionEvent.ACTION_POINTER_UP:
+                    scrollView.requestDisallowInterceptTouchEvent(false);
+                    break;
+                default:
+                    break;
+            }
+            return false;
+        });
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 300));
         lp.topMargin = Ui.dp(this, 10);
@@ -173,17 +196,18 @@ public final class TripDetailActivity extends Activity {
         header.setGravity(Gravity.CENTER_VERTICAL);
         header.addView(Ui.strong(this, "路程 - 速度曲线", 14, Ui.TEXT),
                 new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-        TextView legend = Ui.text(this, "蓝线：速度 · 黄点：最高", 9.5f, 0xFF64748B);
+        TextView legend = Ui.text(this, "蓝线：速度 · 黄点：最高/标尺", 9.5f, 0xFF64748B);
         header.addView(legend);
         card.addView(header);
 
-        TextView axes = Ui.text(this, "横轴：累计路程（公里）　纵轴：速度（km/h）", 9.5f, 0xFF7D8DA6);
+        TextView axes = Ui.text(this, "横轴：累计路程（公里）　纵轴：速度（km/h）　拖动标尺查看该点", 9.5f, 0xFF7D8DA6);
         LinearLayout.LayoutParams axesLp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         axesLp.topMargin = Ui.dp(this, 5);
         card.addView(axes, axesLp);
 
         chartView = new SpeedChartView(this);
+        chartView.setOnPointSelectedListener(this::onChartPointSelected);
         chartView.setTrip(trip);
         LinearLayout.LayoutParams chartLp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 235));
@@ -257,6 +281,22 @@ public final class TripDetailActivity extends Activity {
         routePosted = true;
         String json = trip.mapJson();
         webView.evaluateJavascript("window.setRoute(" + json + ");", null);
+        postSelectedPoint();
+    }
+
+    private void onChartPointSelected(Trip.Point point) {
+        pendingSelectedPoint = point;
+        postSelectedPoint();
+    }
+
+    private void postSelectedPoint() {
+        if (!mapReady || !routePosted || pendingSelectedPoint == null || webView == null) {
+            return;
+        }
+        String js = String.format(Locale.US,
+                "window.setSelectedPoint(%.7f,%.7f);",
+                pendingSelectedPoint.lat, pendingSelectedPoint.lng);
+        webView.evaluateJavascript(js, null);
     }
 
     @Override

@@ -1,6 +1,7 @@
 package com.buswake.app;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Intent;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
@@ -18,11 +19,14 @@ import java.util.List;
 public final class DataActivity extends Activity {
     private static final int REQ_EXPORT_LOG = 801;
     private static final int REQ_EXPORT_BACKUP = 802;
+    private static final int REQ_IMPORT_BACKUP = 803;
 
     private TextView logSummary;
     private TextView dataSummary;
     private TextView backupButton;
+    private TextView restoreButton;
     private boolean exporting;
+    private boolean restoring;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -149,7 +153,7 @@ public final class DataActivity extends Activity {
         card.addView(dataSummary, lp);
 
         TextView desc = Ui.text(this,
-                "导出一个 JSON 文件，包含 App 设置、全部站点和全部历史行程（含路线与逐点速度）。",
+                "导出一个 JSON 文件，包含 App 设置、全部站点和全部历史行程（含路线与逐点速度）。也可以从这里恢复备份。",
                 10.5f, 0xFF7D8DA6);
         LinearLayout.LayoutParams descLp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
@@ -164,6 +168,13 @@ public final class DataActivity extends Activity {
                 LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 46));
         btnLp.topMargin = Ui.dp(this, 12);
         card.addView(backupButton, btnLp);
+
+        restoreButton = outlineButton("恢复备份", 0xFFCBD5E1, 0x0A94A3B8, 0x5594A3B8);
+        restoreButton.setOnClickListener(v -> restoreBackup());
+        LinearLayout.LayoutParams restoreLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 42));
+        restoreLp.topMargin = Ui.dp(this, 8);
+        card.addView(restoreButton, restoreLp);
         return card;
     }
 
@@ -236,6 +247,25 @@ public final class DataActivity extends Activity {
         }
     }
 
+    private void restoreBackup() {
+        if (restoring) {
+            return;
+        }
+        if (TripStore.isRecording(this) || StopStore.isGuardRunning(this)) {
+            new AlertDialog.Builder(this)
+                    .setTitle("请先停止当前任务")
+                    .setMessage("恢复备份会覆盖站点、设置和历史行程。请先结束行程记录并停止叫醒守护。")
+                    .setPositiveButton("知道了", null)
+                    .show();
+            return;
+        }
+        try {
+            startActivityForResult(ExportManager.openDocument("application/json"), REQ_IMPORT_BACKUP);
+        } catch (Exception e) {
+            Toast.makeText(this, "没有可用的文件选择程序", Toast.LENGTH_LONG).show();
+        }
+    }
+
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
@@ -256,7 +286,75 @@ public final class DataActivity extends Activity {
             }
         } else if (requestCode == REQ_EXPORT_BACKUP) {
             exportBackupTo(uri);
+        } else if (requestCode == REQ_IMPORT_BACKUP) {
+            readBackup(uri);
         }
+    }
+
+    private void readBackup(Uri uri) {
+        if (restoring) {
+            return;
+        }
+        restoring = true;
+        restoreButton.setEnabled(false);
+        restoreButton.setAlpha(0.55f);
+        restoreButton.setText("正在读取备份…");
+        new Thread(() -> {
+            try {
+                String text = BackupManager.readText(this, uri);
+                BackupManager.BackupData data = BackupManager.parse(this, text);
+                runOnUiThread(() -> {
+                    restoring = false;
+                    restoreButton.setEnabled(true);
+                    restoreButton.setAlpha(1f);
+                    restoreButton.setText("恢复备份");
+                    confirmRestore(data);
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    restoring = false;
+                    restoreButton.setEnabled(true);
+                    restoreButton.setAlpha(1f);
+                    restoreButton.setText("恢复备份");
+                    Toast.makeText(this, "备份读取失败：" + e.getMessage(), Toast.LENGTH_LONG).show();
+                });
+            }
+        }).start();
+    }
+
+    private void confirmRestore(BackupManager.BackupData data) {
+        new AlertDialog.Builder(this)
+                .setTitle("恢复这份备份？")
+                .setMessage("将覆盖当前 App 设置、站点和全部历史行程。\n\n"
+                        + "备份内容：站点 " + data.stops.size() + " 个，行程 " + data.trips.size() + " 条。\n"
+                        + "自定义闹钟音乐不包含在备份中，恢复后保持当前音乐设置。")
+                .setNegativeButton("取消", null)
+                .setPositiveButton("覆盖恢复", (d, w) -> applyBackup(data))
+                .show();
+    }
+
+    private void applyBackup(BackupManager.BackupData data) {
+        restoring = true;
+        restoreButton.setEnabled(false);
+        restoreButton.setText("正在恢复…");
+        new Thread(() -> {
+            boolean ok = BackupManager.apply(this, data);
+            runOnUiThread(() -> {
+                restoring = false;
+                restoreButton.setEnabled(true);
+                restoreButton.setAlpha(1f);
+                restoreButton.setText("恢复备份");
+                if (ok) {
+                    AppLog.i("Restore", "Restore completed");
+                    refreshSummary();
+                    Toast.makeText(this, "备份已恢复：设置、站点和历史行程",
+                            Toast.LENGTH_LONG).show();
+                } else {
+                    AppLog.e("Restore", "Restore failed");
+                    Toast.makeText(this, "恢复失败，请检查文件后重试", Toast.LENGTH_LONG).show();
+                }
+            });
+        }).start();
     }
 
     private void exportBackupTo(Uri uri) {

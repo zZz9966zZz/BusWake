@@ -31,8 +31,8 @@ public final class TripRecordService extends Service {
     private static final int NOTIF_TRIP = 3001;
     private static final long PERSIST_INTERVAL_MS = 5000;
     private static final long NOTIF_INTERVAL_MS = 5000;
-    private static final long RECORD_GPS_INTERVAL_MS = 1000L;
-    private static final long RECORD_NETWORK_INTERVAL_MS = 3000L;
+    private static final long RECORD_GPS_INTERVAL_MS = 500L;
+    private static final long RECORD_NETWORK_INTERVAL_MS = 500L;
 
     private LocationManager locationManager;
     private PowerManager powerManager;
@@ -131,7 +131,7 @@ public final class TripRecordService extends Service {
         lastLocation = null;
         trip = Trip.create(startedAt);
         TripStore.startRecording(this, startedAt);
-        AppLog.i("Trip", "Recording started, sample interval: GPS=1000ms, network=3000ms");
+        AppLog.i("Trip", "Recording started, sample interval: GPS=500ms, network=500ms");
 
         startForeground(NOTIF_TRIP, buildNotification(false));
         acquireWakeLock();
@@ -204,7 +204,7 @@ public final class TripRecordService extends Service {
         long relative = nowElapsed - startedElapsed;
         if (lastLocation != null) {
             long dt = nowElapsed - lastElapsed;
-            if (dt < 600) {
+            if (dt < 300) {
                 return;
             }
             float[] result = new float[1];
@@ -230,6 +230,7 @@ public final class TripRecordService extends Service {
         } else {
             speedKmh = location.hasSpeed() ? Math.max(0, location.getSpeed() * 3.6) : 0;
         }
+        speedKmh = Trip.round1(speedKmh);
 
         trip.addPoint(new Trip.Point(location.getLatitude(), location.getLongitude(),
                 relative, distanceM, speedKmh));
@@ -266,7 +267,7 @@ public final class TripRecordService extends Service {
         String text = updateText
                 ? String.format(Locale.CHINA, "%s · %s · 当前 %s",
                 StopStore.formatDistance(distanceM), Trip.formatDuration(seconds),
-                StopStore.formatSpeed(speedKmh))
+                Trip.formatSpeed1(speedKmh))
                 : "正在获取定位…";
 
         Intent open = new Intent(this, TripListActivity.class)
@@ -319,6 +320,7 @@ public final class TripRecordService extends Service {
         }
         releaseWakeLock();
         trip.endedAt = System.currentTimeMillis();
+        trip.normalizeRecordedSpeeds();
         boolean saved = TripStore.add(this, trip);
         if (saved) {
             TripStore.markSaved(this, trip.id);

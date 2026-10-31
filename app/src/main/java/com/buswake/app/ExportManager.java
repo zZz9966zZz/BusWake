@@ -27,17 +27,35 @@ public final class ExportManager {
         return i;
     }
 
+    public static Intent openDocument(String mime) {
+        Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        i.addCategory(Intent.CATEGORY_OPENABLE);
+        i.setType(mime);
+        return i;
+    }
+
     public static String timestamp() {
         return new SimpleDateFormat("yyyyMMdd-HHmm", Locale.US).format(new Date());
+    }
+
+    private static String isoTime(long time) {
+        return new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ", Locale.US).format(new Date(time));
+    }
+
+    private static JSONObject metric(Object value, String unit) throws Exception {
+        JSONObject o = new JSONObject();
+        o.put("value", value);
+        o.put("unit", unit);
+        return o;
     }
 
     public static String buildBackupJson(Context c) {
         JSONObject root = new JSONObject();
         try {
             root.put("format", "BusWake backup");
-            root.put("formatVersion", 1);
-            root.put("exportedAt", new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ", Locale.US)
-                    .format(new Date()));
+            root.put("formatVersion", 2);
+            root.put("exportedAt", isoTime(System.currentTimeMillis()));
+            root.put("units", units());
 
             JSONObject app = new JSONObject();
             app.put("package", c.getPackageName());
@@ -50,36 +68,68 @@ public final class ExportManager {
             root.put("app", app);
 
             JSONObject settings = new JSONObject();
-            settings.put("wakeRadiusM", StopStore.getRadiusM(c));
-            settings.put("locationIntervalMs", StopStore.getIntervalMs(c));
-            settings.put("manualSpeedKmh", StopStore.getManualSpeed(c));
-            settings.put("leadTimeSeconds", StopStore.getLeadTimeSeconds(c));
-            settings.put("alarmSoundName", AlarmSoundStore.getDisplayName(c));
-            settings.put("alarmSoundCustom", AlarmSoundStore.hasCustom(c));
-            settings.put("alarmSoundAudioIncluded", false);
+            settings.put("wakeRadius", metric(StopStore.getRadiusM(c), "m"));
+            settings.put("locationInterval", metric(StopStore.getIntervalMs(c), "ms"));
+            settings.put("manualSpeed", metric(Trip.round1(StopStore.getManualSpeed(c)), "km/h"));
+            settings.put("leadTime", metric(StopStore.getLeadTimeSeconds(c), "s"));
+            JSONObject sound = new JSONObject();
+            sound.put("name", AlarmSoundStore.getDisplayName(c));
+            sound.put("custom", AlarmSoundStore.hasCustom(c));
+            sound.put("audioIncluded", false);
+            settings.put("alarmSound", sound);
             root.put("settings", settings);
 
             JSONArray stops = new JSONArray();
             for (Stop s : StopStore.loadStops(c)) {
-                stops.put(s.toJson());
+                JSONObject item = new JSONObject();
+                item.put("id", s.id);
+                item.put("name", s.name);
+                item.put("latitude", s.lat);
+                item.put("longitude", s.lng);
+                item.put("createdAtIso", isoTime(s.createdAt));
+                item.put("createdAtEpochMs", s.createdAt);
+                item.put("units", units());
+                stops.put(item);
             }
             root.put("stops", stops);
 
             JSONArray trips = new JSONArray();
             List<Trip> all = TripStore.loadAll(c);
             for (Trip t : all) {
-                trips.put(t.toJson());
+                trips.put(t.toExportJson());
             }
             root.put("trips", trips);
-            root.put("stopCount", stops.length());
-            root.put("tripCount", trips.length());
+            root.put("summary", summary(stops.length(), trips.length()));
         } catch (Exception e) {
             try {
                 root.put("error", String.valueOf(e.getMessage()));
             } catch (Exception ignored) {
             }
         }
-        return root.toString();
+        try {
+            return root.toString(2);
+        } catch (Exception e) {
+            return root.toString();
+        }
+    }
+
+    private static JSONObject units() throws Exception {
+        JSONObject units = new JSONObject();
+        units.put("distance", "m");
+        units.put("speed", "km/h");
+        units.put("time", "s");
+        units.put("latitude", "degrees");
+        units.put("longitude", "degrees");
+        units.put("timestamp", "ISO 8601");
+        return units;
+    }
+
+    private static JSONObject summary(int stops, int trips) throws Exception {
+        JSONObject o = new JSONObject();
+        o.put("stopCount", stops);
+        o.put("tripCount", trips);
+        o.put("alarmSoundAudioIncluded", false);
+        return o;
     }
 
     public static boolean writeText(Context c, Uri uri, String text) {

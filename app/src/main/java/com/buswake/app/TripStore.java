@@ -110,6 +110,12 @@ public final class TripStore {
         }
     }
 
+    public static boolean replaceAll(Context c, List<Trip> trips) {
+        synchronized (LOCK) {
+            return writeAll(c, new ArrayList<>(trips));
+        }
+    }
+
     private static boolean writeAll(Context c, List<Trip> trips) {
         JSONArray arr = new JSONArray();
         for (Trip t : trips) {
