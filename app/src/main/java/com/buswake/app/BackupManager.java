@@ -28,7 +28,6 @@ public final class BackupManager {
         public int intervalMs;
         public int tripIntervalMs;
         public float manualSpeed;
-        public float tripSpeedLimitKmh;
         public int leadSeconds;
         /** True when this backup contains App settings and stops. */
         public boolean hasSettingsStops;
@@ -163,7 +162,6 @@ public final class BackupManager {
             target.intervalMs = part.intervalMs;
             target.tripIntervalMs = part.tripIntervalMs;
             target.manualSpeed = part.manualSpeed;
-            target.tripSpeedLimitKmh = part.tripSpeedLimitKmh;
             target.leadSeconds = part.leadSeconds;
             target.stops.clear();
             target.stops.addAll(part.stops);
@@ -180,7 +178,6 @@ public final class BackupManager {
         data.intervalMs = StopStore.getIntervalMs(c);
         data.tripIntervalMs = StopStore.getTripIntervalMs(c);
         data.manualSpeed = StopStore.getManualSpeed(c);
-        data.tripSpeedLimitKmh = StopStore.getTripSpeedLimitKmh(c);
         data.leadSeconds = StopStore.getLeadTimeSeconds(c);
 
         JSONObject settings = root.optJSONObject("settings");
@@ -196,10 +193,6 @@ public final class BackupManager {
             data.manualSpeed = (float) Math.max(StopStore.MIN_SPEED_KMH,
                     Math.min(StopStore.MAX_SPEED_KMH,
                             metric(settings, "manualSpeed", "manualSpeedKmh", data.manualSpeed)));
-            data.tripSpeedLimitKmh = (float) Math.max(StopStore.MIN_TRIP_SPEED_LIMIT_KMH,
-                    Math.min(StopStore.MAX_TRIP_SPEED_LIMIT_KMH,
-                            metric(settings, "tripSpeedLimit", "tripSpeedLimitKmh",
-                                    data.tripSpeedLimitKmh)));
             data.leadSeconds = clamp((int) Math.round(metric(settings, "leadTime",
                             "leadTimeSeconds", data.leadSeconds)),
                     StopStore.MIN_LEAD_TIME_SECONDS, StopStore.MAX_LEAD_TIME_SECONDS);
@@ -304,7 +297,6 @@ public final class BackupManager {
         StopStore.setIntervalMs(c, data.intervalMs);
         StopStore.setTripIntervalMs(c, data.tripIntervalMs);
         StopStore.setManualSpeed(c, data.manualSpeed);
-        StopStore.setTripSpeedLimitKmh(c, data.tripSpeedLimitKmh);
         StopStore.setLeadTimeSeconds(c, data.leadSeconds);
         if (data.stops.isEmpty()) {
             StopStore.select(c, null);

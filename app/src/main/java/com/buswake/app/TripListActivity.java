@@ -15,7 +15,6 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
-import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
 import android.view.Window;
@@ -40,12 +39,10 @@ public final class TripListActivity extends Activity {
     private TextView recordStatus;
     private TextView recordDetail;
     private TextView recordButton;
-    private TextView speedLimitView;
     private TextView historyCount;
     private boolean pendingStart;
     private boolean lastRecordingState = false;
     private int lastSavedCounter;
-    private boolean reviewPromptedThisResume;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable ticker = new Runnable() {
@@ -57,7 +54,6 @@ public final class TripListActivity extends Activity {
                 lastSavedCounter = counter;
                 refreshList();
             }
-            maybeReviewSpeed();
             handler.postDelayed(this, 1000);
         }
     };
@@ -76,9 +72,7 @@ public final class TripListActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
-        reviewPromptedThisResume = false;
         refreshAll();
-        maybeReviewSpeed();
         handler.removeCallbacks(ticker);
         handler.post(ticker);
     }
@@ -204,17 +198,6 @@ public final class TripListActivity extends Activity {
         buttonLp.topMargin = Ui.dp(this, 14);
         card.addView(recordButton, buttonLp);
 
-        speedLimitView = Ui.text(this,
-                "速度上限 " + StopStore.formatTripSpeedLimit(this) + " · 点击修改",
-                10.5f, Ui.ACCENT);
-        speedLimitView.setGravity(Gravity.CENTER);
-        speedLimitView.setPadding(Ui.dp(this, 8), Ui.dp(this, 8), Ui.dp(this, 8), Ui.dp(this, 8));
-        speedLimitView.setOnClickListener(v -> editSpeedLimit());
-        LinearLayout.LayoutParams limitLp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        limitLp.topMargin = Ui.dp(this, 8);
-        card.addView(speedLimitView, limitLp);
-
         TextView hint = Ui.text(this, "记录频率可在“叫醒设置”中调整，默认 0.5 秒；锁屏后仍会继续。", 10, 0xFF64748B);
         LinearLayout.LayoutParams hintLp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
@@ -244,66 +227,6 @@ public final class TripListActivity extends Activity {
     private void refreshAll() {
         refreshRecording();
         refreshList();
-        updateSpeedLimitText();
-    }
-
-    private void editSpeedLimit() {
-        EditText input = new EditText(this);
-        input.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
-        input.setText(String.format(Locale.CHINA, "%.0f", StopStore.getTripSpeedLimitKmh(this)));
-        input.setSelection(input.getText().length());
-        int pad = Ui.dp(this, 18);
-        input.setPadding(pad, pad, pad, pad);
-
-        new AlertDialog.Builder(this)
-                .setTitle("行程速度上限（km/h）")
-                .setMessage("记录时超过上限的点会保留下来，结束后逐点确认。可设置 10 – 200 km/h。")
-                .setView(input)
-                .setNegativeButton("取消", null)
-                .setPositiveButton("保存", (dialog, which) -> {
-                    double value;
-                    try {
-                        value = Double.parseDouble(input.getText().toString().trim());
-                    } catch (Exception e) {
-                        Toast.makeText(this, "请输入数字", Toast.LENGTH_SHORT).show();
-                        return;
-                    }
-                    if (value < StopStore.MIN_TRIP_SPEED_LIMIT_KMH
-                            || value > StopStore.MAX_TRIP_SPEED_LIMIT_KMH) {
-                        Toast.makeText(this, "速度上限需在 10 – 200 km/h 之间", Toast.LENGTH_LONG).show();
-                        return;
-                    }
-                    StopStore.setTripSpeedLimitKmh(this, (float) value);
-                    updateSpeedLimitText();
-                    Toast.makeText(this,
-                            TripStore.isRecording(this) ? "已保存，下次记录生效" : "速度上限已保存",
-                            Toast.LENGTH_SHORT).show();
-                })
-                .show();
-    }
-
-    private void updateSpeedLimitText() {
-        if (speedLimitView != null) {
-            speedLimitView.setText("速度上限 " + StopStore.formatTripSpeedLimit(this) + " · 点击修改");
-        }
-    }
-
-    private void maybeReviewSpeed() {
-        if (reviewPromptedThisResume || TripStore.isRecording(this)) {
-            return;
-        }
-        Trip pending = TripStore.findPendingSpeedReview(this);
-        if (pending == null) {
-            return;
-        }
-        reviewPromptedThisResume = true;
-        SpeedReview.review(this, pending, () -> {
-            reviewPromptedThisResume = pending.speedReviewPending;
-            refreshAll();
-            if (!reviewPromptedThisResume) {
-                maybeReviewSpeed();
-            }
-        });
     }
 
     private void refreshRecording() {
@@ -382,13 +305,6 @@ public final class TripListActivity extends Activity {
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
         TextView points = Ui.chip(this, trip.points.size() + " 点", Ui.MUTED, 0x1494A3B8);
         top.addView(points);
-        if (trip.speedReviewPending && trip.hasOverLimitPoints()) {
-            TextView review = Ui.chip(this, "超速待确认", Ui.AMBER, 0x22F59E0B);
-            LinearLayout.LayoutParams reviewLp = new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-            reviewLp.leftMargin = Ui.dp(this, 5);
-            top.addView(review, reviewLp);
-        }
         card.addView(top);
 
         TextView sub = Ui.text(this, trip.subtitle()
@@ -412,6 +328,16 @@ public final class TripListActivity extends Activity {
         view.setBackground(Ui.outlineButton(this, 0x0D38BDF8, 0x2638BDF8, 0x5538BDF8, 9));
         view.setOnClickListener(v -> openTrip(trip));
         actions.addView(view);
+
+        TextView filter = Ui.strong(this, "速度筛选", 11.5f, Ui.AMBER);
+        filter.setGravity(Gravity.CENTER);
+        filter.setPadding(Ui.dp(this, 9), Ui.dp(this, 7), Ui.dp(this, 9), Ui.dp(this, 7));
+        filter.setBackground(Ui.outlineButton(this, 0x14F59E0B, 0x26F59E0B, 0x66F59E0B, 9));
+        filter.setOnClickListener(v -> SpeedFilterDialog.show(this, trip, this::refreshList));
+        LinearLayout.LayoutParams filterLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        filterLp.leftMargin = Ui.dp(this, 6);
+        actions.addView(filter, filterLp);
 
         View spacer = new View(this);
         actions.addView(spacer, new LinearLayout.LayoutParams(0, 1, 1f));

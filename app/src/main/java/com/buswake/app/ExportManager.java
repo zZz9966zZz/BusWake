@@ -263,7 +263,6 @@ public final class ExportManager {
         settings.put("wakeRadius", metric(StopStore.getRadiusM(c), "m"));
         settings.put("locationInterval", metric(StopStore.getIntervalMs(c), "ms"));
         settings.put("tripInterval", metric(StopStore.getTripIntervalMs(c), "ms"));
-        settings.put("tripSpeedLimit", metric(Trip.round1(StopStore.getTripSpeedLimitKmh(c)), "km/h"));
         settings.put("manualSpeed", metric(Trip.round1(StopStore.getManualSpeed(c)), "km/h"));
         settings.put("leadTime", metric(StopStore.getLeadTimeSeconds(c), "s"));
         JSONObject sound = new JSONObject();

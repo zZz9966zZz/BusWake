@@ -149,15 +149,6 @@ public final class TripStore {
         }
     }
 
-    public static Trip findPendingSpeedReview(Context c) {
-        for (Trip t : loadAll(c)) {
-            if (t.speedReviewPending && t.hasOverLimitPoints()) {
-                return t;
-            }
-        }
-        return null;
-    }
-
     public static boolean delete(Context c, String id) {
         synchronized (LOCK) {
             ArrayList<Trip> trips = new ArrayList<>(loadAll(c));

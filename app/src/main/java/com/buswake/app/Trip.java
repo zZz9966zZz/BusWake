@@ -14,8 +14,6 @@ public final class Trip {
     public String id;
     public long startedAt;
     public long endedAt;
-    public double speedLimitKmh;
-    public boolean speedReviewPending;
     public final List<Point> points = new ArrayList<>();
 
     public static final class Point {
@@ -24,20 +22,13 @@ public final class Trip {
         public long elapsedMs;
         public double distanceM;
         public double speedKmh;
-        public boolean overLimit;
 
         public Point(double lat, double lng, long elapsedMs, double distanceM, double speedKmh) {
-            this(lat, lng, elapsedMs, distanceM, speedKmh, false);
-        }
-
-        public Point(double lat, double lng, long elapsedMs, double distanceM,
-                     double speedKmh, boolean overLimit) {
             this.lat = lat;
             this.lng = lng;
             this.elapsedMs = elapsedMs;
             this.distanceM = distanceM;
             this.speedKmh = speedKmh;
-            this.overLimit = overLimit;
         }
     }
 
@@ -89,18 +80,14 @@ public final class Trip {
         return max;
     }
 
-    public int overLimitCount() {
+    public int countPointsAbove(double thresholdKmh) {
         int count = 0;
         for (Point p : points) {
-            if (p.overLimit) {
+            if (p.speedKmh > thresholdKmh) {
                 count++;
             }
         }
         return count;
-    }
-
-    public boolean hasOverLimitPoints() {
-        return overLimitCount() > 0;
     }
 
     /**
@@ -145,27 +132,13 @@ public final class Trip {
     }
 
     /**
-     * Round speeds to one decimal and correct isolated speed spikes.
-     * If a point is above 30 km/h and differs from the average of its neighbours
-     * by more than 50%, the point keeps its position but adopts that average speed.
+     * Keep recorded speeds intact except for normalising to one decimal. High
+     * points are intentionally not rewritten here; the history speed filter
+     * lets the user review and correct them manually.
      */
     public void normalizeRecordedSpeeds() {
         for (Point p : points) {
             p.speedKmh = round1(Math.max(0, p.speedKmh));
-        }
-        for (int i = 1; i < points.size() - 1; i++) {
-            Point p = points.get(i);
-            if (p.overLimit) {
-                // 超速点保留原始值，等用户结束后逐点确认。
-                continue;
-            }
-            if (p.speedKmh <= 30.0) {
-                continue;
-            }
-            double avg = round1((points.get(i - 1).speedKmh + points.get(i + 1).speedKmh) / 2.0);
-            if (Math.abs(p.speedKmh - avg) > Math.abs(avg) * 0.5) {
-                p.speedKmh = Math.max(0, avg);
-            }
         }
     }
 
@@ -188,8 +161,6 @@ public final class Trip {
             o.put("id", id);
             o.put("startedAt", startedAt);
             o.put("endedAt", endedAt);
-            o.put("speedLimitKmh", round1(speedLimitKmh));
-            o.put("speedReviewPending", speedReviewPending);
             JSONArray arr = new JSONArray();
             for (Point p : points) {
                 JSONArray a = new JSONArray();
@@ -198,7 +169,6 @@ public final class Trip {
                 a.put(p.elapsedMs);
                 a.put(p.distanceM);
                 a.put(p.speedKmh);
-                a.put(p.overLimit ? 1 : 0);
                 arr.put(a);
             }
             o.put("points", arr);
@@ -223,9 +193,6 @@ public final class Trip {
             o.put("distanceMeters", round1(totalDistanceM()));
             o.put("averageSpeedKmh", round1(avgSpeedKmh()));
             o.put("maximumSpeedKmh", round1(maxSpeedKmh()));
-            o.put("speedLimitKmh", round1(speedLimitKmh));
-            o.put("speedReviewPending", speedReviewPending);
-            o.put("overLimitCount", overLimitCount());
             o.put("pointCount", points.size());
             JSONObject units = new JSONObject();
             units.put("distance", "m");
@@ -241,7 +208,6 @@ public final class Trip {
             format.put("speedKmh");
             format.put("latitude");
             format.put("longitude");
-            format.put("overLimit");
             o.put("pointFormat", format);
 
             JSONArray arr = new JSONArray();
@@ -252,7 +218,6 @@ public final class Trip {
                 a.put(round1(p.speedKmh));
                 a.put(p.lat);
                 a.put(p.lng);
-                a.put(p.overLimit ? 1 : 0);
                 arr.put(a);
             }
             o.put("points", arr);
@@ -270,8 +235,6 @@ public final class Trip {
         t.id = o.optString("id", UUID.randomUUID().toString());
         t.startedAt = o.optLong("startedAt", System.currentTimeMillis());
         t.endedAt = o.optLong("endedAt", t.startedAt);
-        t.speedLimitKmh = o.optDouble("speedLimitKmh", 0);
-        t.speedReviewPending = o.optBoolean("speedReviewPending", false);
         JSONArray arr = o.optJSONArray("points");
         boolean compactExport = o.optJSONArray("pointFormat") != null;
         if (arr != null) {
@@ -288,15 +251,13 @@ public final class Trip {
                         double speed = round1(a.optDouble(2));
                         double lat = a.optDouble(3);
                         double lng = a.optDouble(4);
-                        boolean over = a.length() > 5 && a.optInt(5, 0) != 0;
                         if (lat != 0 || lng != 0) {
-                            t.points.add(new Point(lat, lng, elapsedMs, dist, speed, over));
+                            t.points.add(new Point(lat, lng, elapsedMs, dist, speed));
                         }
                     } else {
-                        boolean over = a.length() > 5 && a.optInt(5, 0) != 0;
                         t.points.add(new Point(
                                 a.optDouble(0), a.optDouble(1), a.optLong(2),
-                                a.optDouble(3), round1(a.optDouble(4)), over
+                                a.optDouble(3), round1(a.optDouble(4))
                         ));
                     }
                 } else if (item instanceof JSONObject) {
@@ -312,8 +273,7 @@ public final class Trip {
                     double dist = p.optDouble("distanceMeters", p.optDouble("distanceM", 0));
                     double speed = p.optDouble("speedKmh", p.optDouble("speed", 0));
                     if (lat != 0 || lng != 0) {
-                        t.points.add(new Point(lat, lng, elapsedMs, dist, round1(speed),
-                                p.optBoolean("overLimit", false)));
+                        t.points.add(new Point(lat, lng, elapsedMs, dist, round1(speed)));
                     }
                 }
             }

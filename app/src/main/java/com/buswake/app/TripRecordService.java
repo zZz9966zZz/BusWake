@@ -47,7 +47,6 @@ public final class TripRecordService extends Service {
     private long lastElapsed;
     private double distanceM;
     private double speedKmh;
-    private double speedLimitKmh;
     private int pointCount;
     private long lastPersistAt;
     private long lastNotifyAt;
@@ -130,13 +129,10 @@ public final class TripRecordService extends Service {
         speedKmh = 0;
         pointCount = 0;
         lastLocation = null;
-        speedLimitKmh = StopStore.getTripSpeedLimitKmh(this);
         trip = Trip.create(startedAt);
-        trip.speedLimitKmh = speedLimitKmh;
         TripStore.startRecording(this, startedAt);
         AppLog.i("Trip", "Recording started, requested sample interval="
-                + StopStore.getTripIntervalMs(this) + "ms, speed limit="
-                + Trip.round1(speedLimitKmh) + "km/h");
+                + StopStore.getTripIntervalMs(this) + "ms");
 
         startForeground(NOTIF_TRIP, buildNotification(false));
         acquireWakeLock();
@@ -237,10 +233,9 @@ public final class TripRecordService extends Service {
             speedKmh = location.hasSpeed() ? Math.max(0, location.getSpeed() * 3.6) : 0;
         }
         speedKmh = Trip.round1(speedKmh);
-        boolean overLimit = speedLimitKmh > 0 && speedKmh > speedLimitKmh;
 
         trip.addPoint(new Trip.Point(location.getLatitude(), location.getLongitude(),
-                relative, distanceM, speedKmh, overLimit));
+                relative, distanceM, speedKmh));
         pointCount++;
         lastLocation = location;
         lastElapsed = nowElapsed;
@@ -342,13 +337,12 @@ public final class TripRecordService extends Service {
         }
         trip.endedAt = System.currentTimeMillis();
         trip.normalizeRecordedSpeeds();
-        trip.speedReviewPending = trip.hasOverLimitPoints();
         boolean saved = TripStore.add(this, trip);
         if (saved) {
             TripStore.markSaved(this, trip.id);
             AppLog.i("Trip", "Trip saved: " + Math.round(trip.totalDistanceM())
                     + "m, " + (trip.durationMs() / 1000) + "s, " + trip.points.size()
-                    + " points, overLimit=" + trip.overLimitCount());
+                    + " points");
         } else {
             TripStore.clearLive(this);
             AppLog.w("Trip", "Trip discarded: too short");

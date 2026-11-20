@@ -28,7 +28,6 @@ public final class StopStore {
     public static final String KEY_MANUAL_SPEED = "manual_speed_kmh";
     public static final String KEY_LEAD_TIME_SEC = "wake_lead_time_sec";
     public static final String KEY_TRIP_INTERVAL_MS = "trip_interval_ms";
-    public static final String KEY_TRIP_SPEED_LIMIT_KMH = "trip_speed_limit_kmh";
 
     public static final int DEFAULT_RADIUS_M = 2000;
     public static final int DEFAULT_INTERVAL_MS = 2000;
@@ -40,10 +39,6 @@ public final class StopStore {
     public static final int DEFAULT_TRIP_INTERVAL_MS = 500;
     public static final int MIN_TRIP_INTERVAL_MS = 200;
     public static final int MAX_TRIP_INTERVAL_MS = 10000;
-
-    public static final float DEFAULT_TRIP_SPEED_LIMIT_KMH = 120f;
-    public static final float MIN_TRIP_SPEED_LIMIT_KMH = 10f;
-    public static final float MAX_TRIP_SPEED_LIMIT_KMH = 200f;
 
     public static final float DEFAULT_MANUAL_SPEED = 80f;
     public static final float MIN_SPEED_KMH = 1f;
@@ -156,21 +151,6 @@ public final class StopStore {
 
     public static String formatTripInterval(int ms) {
         return String.format(java.util.Locale.CHINA, "%.1f 秒", ms / 1000.0);
-    }
-
-    public static float getTripSpeedLimitKmh(Context c) {
-        float value = prefs(c).getFloat(KEY_TRIP_SPEED_LIMIT_KMH, DEFAULT_TRIP_SPEED_LIMIT_KMH);
-        return Math.max(MIN_TRIP_SPEED_LIMIT_KMH, Math.min(MAX_TRIP_SPEED_LIMIT_KMH, value));
-    }
-
-    public static void setTripSpeedLimitKmh(Context c, float kmh) {
-        float value = Math.max(MIN_TRIP_SPEED_LIMIT_KMH,
-                Math.min(MAX_TRIP_SPEED_LIMIT_KMH, kmh));
-        prefs(c).edit().putFloat(KEY_TRIP_SPEED_LIMIT_KMH, value).apply();
-    }
-
-    public static String formatTripSpeedLimit(Context c) {
-        return String.format(java.util.Locale.CHINA, "%.0f km/h", getTripSpeedLimitKmh(c));
     }
 
     public static String formatRadius(int meters) {

@@ -74,9 +74,7 @@ public final class TripDetailActivity extends Activity {
         content.addView(buildStatsCard(), new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 
-        if (trip.speedReviewPending && trip.hasOverLimitPoints()) {
-            content.addView(buildSpeedReviewCard(), cardParams());
-        }
+        content.addView(buildSpeedFilterCard(), cardParams());
 
         content.addView(buildMapCard(), cardParams());
 
@@ -146,26 +144,25 @@ public final class TripDetailActivity extends Activity {
         parent.addView(col, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
     }
 
-    private View buildSpeedReviewCard() {
+    private View buildSpeedFilterCard() {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         card.setPadding(Ui.dp(this, 15), Ui.dp(this, 14), Ui.dp(this, 15), Ui.dp(this, 14));
         card.setBackground(Ui.rounded(this, 0xFF2A1E12, 16, 1, 0x88F59E0B));
 
-        card.addView(Ui.strong(this,
-                "有 " + trip.overLimitCount() + " 个超速点待确认", 14, Ui.AMBER));
-        TextView desc = Ui.text(this, String.format(Locale.CHINA,
-                "记录时速度超过上限 %.0f km/h。数据已保留，请逐点选择：保留、取前后平均或手动输入。",
-                trip.speedLimitKmh), 10.5f, 0xFFD6C3A5);
+        card.addView(Ui.strong(this, "按速度筛选", 14, Ui.AMBER));
+        TextView desc = Ui.text(this,
+                "输入一个速度值，找出这条行程中所有超过它的点，再逐点选择保留、取前后平均或手动输入。",
+                10.5f, 0xFFD6C3A5);
         LinearLayout.LayoutParams descLp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         descLp.topMargin = Ui.dp(this, 6);
         card.addView(desc, descLp);
 
-        TextView button = Ui.strong(this, "逐点确认超速数据", 12.5f, 0xFF2A1E05);
+        TextView button = Ui.strong(this, "选择速度并筛选", 12.5f, 0xFF2A1E05);
         button.setGravity(Gravity.CENTER);
         button.setBackground(Ui.button(this, Ui.AMBER, 0xFFFCD34D, 11));
-        button.setOnClickListener(v -> SpeedReview.review(this, trip, () -> {
+        button.setOnClickListener(v -> SpeedFilterDialog.show(this, trip, () -> {
             if (!isFinishing()) {
                 recreate();
             }
