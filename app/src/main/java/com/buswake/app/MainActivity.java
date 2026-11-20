@@ -148,7 +148,7 @@ public final class MainActivity extends Activity {
 
         column.addView(buildTipsCard(), marginsTop(14));
 
-        TextView footer = Ui.text(this, "到站叫醒 v1.10  ·  站点坐标仅保存在本机", 10, 0xFF64748B);
+        TextView footer = Ui.text(this, "到站叫醒 v1.10.1  ·  站点坐标仅保存在本机", 10, 0xFF64748B);
         footer.setGravity(Gravity.CENTER);
         column.addView(footer, marginsTop(22));
 

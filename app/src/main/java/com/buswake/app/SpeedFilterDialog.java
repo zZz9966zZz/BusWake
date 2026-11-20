@@ -49,16 +49,30 @@ public final class SpeedFilterDialog {
                                 Toast.LENGTH_LONG).show();
                         return;
                     }
-                    new AlertDialog.Builder(activity)
-                            .setTitle("找到 " + count + " 个点")
-                            .setMessage(String.format(Locale.CHINA,
-                                    "超过 %.1f km/h 的点有 %d 个。接下来逐点确认：保留、取前后平均或手动输入。",
-                                    threshold, count))
-                            .setNegativeButton("取消", null)
-                            .setPositiveButton("开始确认", (d, w) ->
-                                    SpeedReview.reviewAbove(activity, trip, threshold, onDone))
-                            .show();
+                    dialog.dismiss();
+                    showConfirm(activity, trip, threshold, count, onDone);
                 })
                 .show();
+    }
+
+    private static void showConfirm(Activity activity, Trip trip, double threshold,
+                                    int count, Runnable onDone) {
+        activity.getWindow().getDecorView().postDelayed(() -> {
+            if (activity.isFinishing()) {
+                return;
+            }
+            new AlertDialog.Builder(activity)
+                    .setTitle("找到 " + count + " 个点")
+                    .setMessage(String.format(Locale.CHINA,
+                            "超过 %.1f km/h 的点有 %d 个。接下来逐点确认：保留、取前后平均或手动输入。",
+                            threshold, count))
+                    .setNegativeButton("取消", null)
+                    .setPositiveButton("开始确认", (dialog, which) -> {
+                        dialog.dismiss();
+                        activity.getWindow().getDecorView().postDelayed(
+                                () -> SpeedReview.reviewAbove(activity, trip, threshold, onDone), 120);
+                    })
+                    .show();
+        }, 120);
     }
 }
