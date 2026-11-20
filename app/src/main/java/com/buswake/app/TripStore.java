@@ -97,6 +97,67 @@ public final class TripStore {
         }
     }
 
+    public static boolean update(Context c, Trip trip) {
+        if (trip == null) {
+            return false;
+        }
+        synchronized (LOCK) {
+            ArrayList<Trip> trips = new ArrayList<>(loadAll(c));
+            for (int i = 0; i < trips.size(); i++) {
+                if (trips.get(i).id.equals(trip.id)) {
+                    trips.set(i, trip);
+                    return writeAll(c, trips);
+                }
+            }
+            return false;
+        }
+    }
+
+    /**
+     * Merge imported trips by id: replace matching ids, add new ones, and keep
+     * every existing trip that is not part of the import.
+     */
+    public static boolean upsertAll(Context c, List<Trip> incoming) {
+        if (incoming == null || incoming.isEmpty()) {
+            return true;
+        }
+        synchronized (LOCK) {
+            ArrayList<Trip> trips = new ArrayList<>(loadAll(c));
+            boolean changed = false;
+            for (Trip source : incoming) {
+                if (source == null || source.points.size() < 2) {
+                    continue;
+                }
+                if (source.id == null || source.id.isEmpty()) {
+                    source.id = java.util.UUID.randomUUID().toString();
+                }
+                boolean replaced = false;
+                for (int i = 0; i < trips.size(); i++) {
+                    if (trips.get(i).id.equals(source.id)) {
+                        trips.set(i, source);
+                        replaced = true;
+                        changed = true;
+                        break;
+                    }
+                }
+                if (!replaced) {
+                    trips.add(source);
+                    changed = true;
+                }
+            }
+            return !changed || writeAll(c, trips);
+        }
+    }
+
+    public static Trip findPendingSpeedReview(Context c) {
+        for (Trip t : loadAll(c)) {
+            if (t.speedReviewPending && t.hasOverLimitPoints()) {
+                return t;
+            }
+        }
+        return null;
+    }
+
     public static boolean delete(Context c, String id) {
         synchronized (LOCK) {
             ArrayList<Trip> trips = new ArrayList<>(loadAll(c));

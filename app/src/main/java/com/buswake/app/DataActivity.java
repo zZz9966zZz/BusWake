@@ -14,6 +14,7 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public final class DataActivity extends Activity {
@@ -27,6 +28,9 @@ public final class DataActivity extends Activity {
     private TextView restoreButton;
     private boolean exporting;
     private boolean restoring;
+    private boolean pendingIncludeSettings;
+    private final ArrayList<String> pendingTripIds = new ArrayList<>();
+    private boolean pendingExport;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -153,23 +157,23 @@ public final class DataActivity extends Activity {
         card.addView(dataSummary, lp);
 
         TextView desc = Ui.text(this,
-                "导出一个 JSON 文件，包含 App 设置、全部站点和全部历史行程（含路线与逐点速度）。也可以从这里恢复备份。",
+                "设置与站点会生成一个文件，每条行程单独生成一个文件。只选一项时导出该 JSON；选多项时打包成 ZIP。恢复时可导入单个文件或整个 ZIP。",
                 10.5f, 0xFF7D8DA6);
         LinearLayout.LayoutParams descLp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         descLp.topMargin = Ui.dp(this, 5);
         card.addView(desc, descLp);
 
-        backupButton = Ui.strong(this, "导出设置、站点和行程", 13, 0xFF052331);
+        backupButton = Ui.strong(this, "选择备份内容", 13, 0xFF052331);
         backupButton.setGravity(Gravity.CENTER);
         backupButton.setBackground(Ui.button(this, Ui.ACCENT, 0xFF7DD3FC, 12));
-        backupButton.setOnClickListener(v -> exportBackup());
+        backupButton.setOnClickListener(v -> showBackupChooser());
         LinearLayout.LayoutParams btnLp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 46));
         btnLp.topMargin = Ui.dp(this, 12);
         card.addView(backupButton, btnLp);
 
-        restoreButton = outlineButton("恢复备份", 0xFFCBD5E1, 0x0A94A3B8, 0x5594A3B8);
+        restoreButton = outlineButton("导入备份（JSON / ZIP）", 0xFFCBD5E1, 0x0A94A3B8, 0x5594A3B8);
         restoreButton.setOnClickListener(v -> restoreBackup());
         LinearLayout.LayoutParams restoreLp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 42));
@@ -234,15 +238,64 @@ public final class DataActivity extends Activity {
         }
     }
 
-    private void exportBackup() {
+    private void showBackupChooser() {
         if (exporting) {
+            Toast.makeText(this, "正在导出，请稍候", Toast.LENGTH_SHORT).show();
             return;
         }
+        List<Trip> trips = TripStore.loadAll(this);
+        final String[] labels = new String[trips.size() + 1];
+        final boolean[] checked = new boolean[trips.size() + 1];
+        labels[0] = "设置与站点（1 个文件）";
+        checked[0] = true;
+        for (int i = 0; i < trips.size(); i++) {
+            Trip t = trips.get(i);
+            labels[i + 1] = "行程 · " + t.title() + " · "
+                    + StopStore.formatDistance(t.totalDistanceM());
+            checked[i + 1] = true;
+        }
+
+        new AlertDialog.Builder(this)
+                .setTitle("选择要备份的内容")
+                .setMultiChoiceItems(labels, checked, (dialog, which, isChecked) ->
+                        checked[which] = isChecked)
+                .setNegativeButton("取消", null)
+                .setPositiveButton("下一步", (dialog, which) -> {
+                    boolean includeSettings = checked[0];
+                    ArrayList<String> ids = new ArrayList<>();
+                    for (int i = 0; i < trips.size(); i++) {
+                        if (checked[i + 1]) {
+                            ids.add(trips.get(i).id);
+                        }
+                    }
+                    if (!includeSettings && ids.isEmpty()) {
+                        Toast.makeText(this, "请至少选择一项", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    beginBackupExport(includeSettings, ids);
+                })
+                .show();
+    }
+
+    private void beginBackupExport(boolean includeSettings, ArrayList<String> tripIds) {
+        pendingIncludeSettings = includeSettings;
+        pendingTripIds.clear();
+        pendingTripIds.addAll(tripIds);
+        pendingExport = true;
+        int count = (includeSettings ? 1 : 0) + tripIds.size();
+        String mime = count == 1 ? "application/json" : "application/zip";
+        String name;
+        if (count == 1 && includeSettings) {
+            name = "BusWake-settings-stops-" + ExportManager.timestampSeconds() + ".json";
+        } else if (count == 1) {
+            name = "BusWake-trip-" + ExportManager.timestampSeconds() + ".json";
+        } else {
+            name = "BusWake-backup-" + ExportManager.timestampSeconds() + ".zip";
+        }
         try {
-            startActivityForResult(ExportManager.createDocument(
-                    "application/json", "BusWake-backup-" + ExportManager.timestamp() + ".json"),
-                    REQ_EXPORT_BACKUP);
+            startActivityForResult(ExportManager.createDocument(mime, name), REQ_EXPORT_BACKUP);
         } catch (Exception e) {
+            pendingExport = false;
             Toast.makeText(this, "没有可用的文件保存程序", Toast.LENGTH_LONG).show();
         }
     }
@@ -254,13 +307,13 @@ public final class DataActivity extends Activity {
         if (TripStore.isRecording(this) || StopStore.isGuardRunning(this)) {
             new AlertDialog.Builder(this)
                     .setTitle("请先停止当前任务")
-                    .setMessage("恢复备份会覆盖站点、设置和历史行程。请先结束行程记录并停止叫醒守护。")
+                    .setMessage("导入备份会修改站点、设置或历史行程。请先结束行程记录并停止叫醒守护。")
                     .setPositiveButton("知道了", null)
                     .show();
             return;
         }
         try {
-            startActivityForResult(ExportManager.openDocument("application/json"), REQ_IMPORT_BACKUP);
+            startActivityForResult(ExportManager.openBackupDocument(), REQ_IMPORT_BACKUP);
         } catch (Exception e) {
             Toast.makeText(this, "没有可用的文件选择程序", Toast.LENGTH_LONG).show();
         }
@@ -270,10 +323,18 @@ public final class DataActivity extends Activity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (resultCode != RESULT_OK || data == null) {
+            if (requestCode == REQ_EXPORT_BACKUP) {
+                pendingExport = false;
+                pendingTripIds.clear();
+            }
             return;
         }
         Uri uri = data.getData();
         if (uri == null) {
+            if (requestCode == REQ_EXPORT_BACKUP) {
+                pendingExport = false;
+                pendingTripIds.clear();
+            }
             return;
         }
         if (requestCode == REQ_EXPORT_LOG) {
@@ -301,13 +362,12 @@ public final class DataActivity extends Activity {
         restoreButton.setText("正在读取备份…");
         new Thread(() -> {
             try {
-                String text = BackupManager.readText(this, uri);
-                BackupManager.BackupData data = BackupManager.parse(this, text);
+                BackupManager.BackupData data = BackupManager.readBackup(this, uri);
                 runOnUiThread(() -> {
                     restoring = false;
                     restoreButton.setEnabled(true);
                     restoreButton.setAlpha(1f);
-                    restoreButton.setText("恢复备份");
+                    restoreButton.setText("导入备份（JSON / ZIP）");
                     confirmRestore(data);
                 });
             } catch (Exception e) {
@@ -315,68 +375,119 @@ public final class DataActivity extends Activity {
                     restoring = false;
                     restoreButton.setEnabled(true);
                     restoreButton.setAlpha(1f);
-                    restoreButton.setText("恢复备份");
+                    restoreButton.setText("导入备份（JSON / ZIP）");
                     Toast.makeText(this, "备份读取失败：" + e.getMessage(), Toast.LENGTH_LONG).show();
                 });
             }
         }).start();
     }
 
+    private String buildRestoreMessage(BackupManager.BackupData data) {
+        StringBuilder message = new StringBuilder();
+        if (data.legacyFull) {
+            message.append("旧版完整备份：将覆盖当前设置、站点和全部历史行程。\n\n");
+        } else {
+            if (data.hasSettingsStops) {
+                message.append("设置与站点：覆盖当前设置和站点，历史行程不变。\n");
+            }
+            if (data.hasTrips) {
+                message.append("行程：").append(data.trips.size())
+                        .append(" 条，按 ID 合并，不删除其他已有行程。\n");
+            }
+            message.append("\n");
+        }
+        message.append("备份内容：站点 ").append(data.stops.size())
+                .append(" 个，行程 ").append(data.trips.size()).append(" 条。\n")
+                .append("自定义闹钟音乐不包含在备份中，导入后保持当前音乐设置。");
+        return message.toString();
+    }
+
     private void confirmRestore(BackupManager.BackupData data) {
         new AlertDialog.Builder(this)
-                .setTitle("恢复这份备份？")
-                .setMessage("将覆盖当前 App 设置、站点和全部历史行程。\n\n"
-                        + "备份内容：站点 " + data.stops.size() + " 个，行程 " + data.trips.size() + " 条。\n"
-                        + "自定义闹钟音乐不包含在备份中，恢复后保持当前音乐设置。")
+                .setTitle("导入这份备份？")
+                .setMessage(buildRestoreMessage(data))
                 .setNegativeButton("取消", null)
-                .setPositiveButton("覆盖恢复", (d, w) -> applyBackup(data))
+                .setPositiveButton("确认导入", (d, w) -> applyBackup(data))
                 .show();
     }
 
     private void applyBackup(BackupManager.BackupData data) {
         restoring = true;
         restoreButton.setEnabled(false);
-        restoreButton.setText("正在恢复…");
+        restoreButton.setText("正在导入…");
         new Thread(() -> {
-            boolean ok = BackupManager.apply(this, data);
+            boolean ok = BackupManager.applySelection(this, data);
             runOnUiThread(() -> {
                 restoring = false;
                 restoreButton.setEnabled(true);
                 restoreButton.setAlpha(1f);
-                restoreButton.setText("恢复备份");
+                restoreButton.setText("导入备份（JSON / ZIP）");
                 if (ok) {
-                    AppLog.i("Restore", "Restore completed");
+                    AppLog.i("Restore", "Selected backup imported");
                     refreshSummary();
-                    Toast.makeText(this, "备份已恢复：设置、站点和历史行程",
-                            Toast.LENGTH_LONG).show();
+                    Toast.makeText(this, "备份已导入", Toast.LENGTH_LONG).show();
                 } else {
-                    AppLog.e("Restore", "Restore failed");
-                    Toast.makeText(this, "恢复失败，请检查文件后重试", Toast.LENGTH_LONG).show();
+                    AppLog.e("Restore", "Import failed");
+                    Toast.makeText(this, "导入失败，请检查文件后重试", Toast.LENGTH_LONG).show();
                 }
             });
         }).start();
     }
 
     private void exportBackupTo(Uri uri) {
-        if (exporting) {
+        if (exporting || !pendingExport) {
             return;
         }
+        final boolean includeSettings = pendingIncludeSettings;
+        final ArrayList<String> tripIds = new ArrayList<>(pendingTripIds);
+        pendingExport = false;
         exporting = true;
         backupButton.setEnabled(false);
         backupButton.setAlpha(0.55f);
         backupButton.setText("正在生成备份…");
         new Thread(() -> {
-            String json = ExportManager.buildBackupJson(this);
-            boolean ok = ExportManager.writeText(this, uri, json);
+            boolean ok = false;
+            int count = 0;
+            try {
+                ArrayList<Trip> trips = new ArrayList<>();
+                for (String id : tripIds) {
+                    Trip t = TripStore.findById(this, id);
+                    if (t != null) {
+                        trips.add(t);
+                    }
+                }
+                count = (includeSettings ? 1 : 0) + trips.size();
+                if (count == 0) {
+                    ok = false;
+                } else if (count == 1 && includeSettings) {
+                    String json = ExportManager.buildSettingsStopsJson(this);
+                    ok = ExportManager.writeBytes(this, uri,
+                            json.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                } else if (count == 1) {
+                    String json = ExportManager.buildTripJson(this, trips.get(0));
+                    ok = ExportManager.writeBytes(this, uri,
+                            json.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                } else {
+                    byte[] zip = ExportManager.buildBackupZip(this, includeSettings, trips);
+                    ok = ExportManager.writeBytes(this, uri, zip);
+                }
+            } catch (Exception e) {
+                AppLog.e("Export", "backup export failed", e);
+            }
+            final int finalCount = count;
+            final boolean finalOk = ok;
             runOnUiThread(() -> {
                 exporting = false;
+                pendingTripIds.clear();
                 backupButton.setEnabled(true);
                 backupButton.setAlpha(1f);
-                backupButton.setText("导出设置、站点和行程");
-                if (ok) {
-                    AppLog.i("Export", "Full backup exported");
+                backupButton.setText("选择备份内容");
+                if (finalOk) {
+                    AppLog.i("Export", "Backup exported: files=" + finalCount);
                     Toast.makeText(this,
-                            "备份已导出：设置、站点和全部行程", Toast.LENGTH_LONG).show();
+                            finalCount == 1 ? "备份已导出（1 个文件）"
+                                    : "备份已打包导出（" + finalCount + " 个文件）",
+                            Toast.LENGTH_LONG).show();
                 } else {
                     Toast.makeText(this,
                             "导出失败，请换一个保存位置", Toast.LENGTH_LONG).show();

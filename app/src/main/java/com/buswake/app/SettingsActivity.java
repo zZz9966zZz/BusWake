@@ -99,7 +99,7 @@ public final class SettingsActivity extends Activity {
             content.addView(buildLiveCard(), cardLp);
         }
 
-        TextView footer = Ui.text(this, "到站叫醒 1.8  ·  设置仅保存在本机", 10, 0xFF64748B);
+        TextView footer = Ui.text(this, "到站叫醒 1.9  ·  设置仅保存在本机", 10, 0xFF64748B);
         footer.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams footerLp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);

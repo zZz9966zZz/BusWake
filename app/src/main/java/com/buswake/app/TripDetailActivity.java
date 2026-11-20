@@ -74,6 +74,10 @@ public final class TripDetailActivity extends Activity {
         content.addView(buildStatsCard(), new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 
+        if (trip.speedReviewPending && trip.hasOverLimitPoints()) {
+            content.addView(buildSpeedReviewCard(), cardParams());
+        }
+
         content.addView(buildMapCard(), cardParams());
 
         content.addView(buildChartCard(), cardParams());
@@ -140,6 +144,37 @@ public final class TripDetailActivity extends Activity {
         lp.topMargin = Ui.dp(this, 4);
         col.addView(l, lp);
         parent.addView(col, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+    }
+
+    private View buildSpeedReviewCard() {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setPadding(Ui.dp(this, 15), Ui.dp(this, 14), Ui.dp(this, 15), Ui.dp(this, 14));
+        card.setBackground(Ui.rounded(this, 0xFF2A1E12, 16, 1, 0x88F59E0B));
+
+        card.addView(Ui.strong(this,
+                "有 " + trip.overLimitCount() + " 个超速点待确认", 14, Ui.AMBER));
+        TextView desc = Ui.text(this, String.format(Locale.CHINA,
+                "记录时速度超过上限 %.0f km/h。数据已保留，请逐点选择：保留、取前后平均或手动输入。",
+                trip.speedLimitKmh), 10.5f, 0xFFD6C3A5);
+        LinearLayout.LayoutParams descLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        descLp.topMargin = Ui.dp(this, 6);
+        card.addView(desc, descLp);
+
+        TextView button = Ui.strong(this, "逐点确认超速数据", 12.5f, 0xFF2A1E05);
+        button.setGravity(Gravity.CENTER);
+        button.setBackground(Ui.button(this, Ui.AMBER, 0xFFFCD34D, 11));
+        button.setOnClickListener(v -> SpeedReview.review(this, trip, () -> {
+            if (!isFinishing()) {
+                recreate();
+            }
+        }));
+        LinearLayout.LayoutParams buttonLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 42));
+        buttonLp.topMargin = Ui.dp(this, 10);
+        card.addView(button, buttonLp);
+        return card;
     }
 
     private View buildMapCard() {
