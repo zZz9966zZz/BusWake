@@ -124,26 +124,26 @@ public final class SpeedReview {
                 .setTitle("手动输入速度（km/h）")
                 .setView(input)
                 .setNegativeButton("取消", (dialog, which) ->
-                        reviewAt(activity, trip, thresholdKmh, indices, position, onDone))
+                        post(activity, () -> reviewAt(activity, trip, thresholdKmh, indices, position, onDone)))
                 .setPositiveButton("确定", (dialog, which) -> {
                     double value;
                     try {
                         value = Double.parseDouble(input.getText().toString().trim());
                     } catch (Exception e) {
                         Toast.makeText(activity, "请输入数字", Toast.LENGTH_SHORT).show();
-                        reviewAt(activity, trip, thresholdKmh, indices, position, onDone);
+                        post(activity, () -> reviewAt(activity, trip, thresholdKmh, indices, position, onDone));
                         return;
                     }
                     if (Double.isNaN(value) || value < 0 || value > 200) {
                         Toast.makeText(activity, "速度需在 0 – 200 km/h 之间", Toast.LENGTH_SHORT).show();
-                        reviewAt(activity, trip, thresholdKmh, indices, position, onDone);
+                        post(activity, () -> reviewAt(activity, trip, thresholdKmh, indices, position, onDone));
                         return;
                     }
                     point.speedKmh = Trip.round1(value);
-                    reviewAt(activity, trip, thresholdKmh, indices, position + 1, onDone);
+                    post(activity, () -> reviewAt(activity, trip, thresholdKmh, indices, position + 1, onDone));
                 })
                 .setOnCancelListener(dialog ->
-                        reviewAt(activity, trip, thresholdKmh, indices, position, onDone))
+                        post(activity, () -> reviewAt(activity, trip, thresholdKmh, indices, position, onDone)))
                 .show();
     }
 
